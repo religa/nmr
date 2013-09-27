@@ -1,0 +1,174 @@
+#!/usr/bin/python
+
+from UserDict import UserDict
+import os, re, sys, math, os.path,string,types,getopt
+from glob import glob
+from copy import *
+
+__doc__ = """The program will print all the parameters from the Varian procpar file from the current directory in a format described by the 'dg' and 'dg2' commands."""
+__author__ = "T. Religa"
+__version__ = "0.1"
+__date__ = "2008-11-05"
+__copyright__ = "T. Religa"
+__license__ = "GPL"
+
+def log(msg):
+ sys.stderr.write(sys.argv[0] + ": " + msg + "\n")
+
+class ParameterReadError(Exception):
+    """This exception is called when there are problems with reading the messages from the file"""
+    
+    def __init__(self, msg):
+        Exception.__init__(self)
+        self.msg = msg
+        
+    def __str__(self):
+        return self.msg
+
+
+class Param:
+    def __init__(self, name, value, description):
+        self.name = name
+        self.description = description
+        self.value = value
+#        self.type = type
+
+class Params(UserDict):
+    def __init__(self, file_name):
+        UserDict.__init__(self)
+ 	self.file_name=file_name
+        self.load(file_name)
+    
+    def load(self, file_name):
+        """Load up all the parameters for this dimension from bruker file"""
+        self.file_name = file_name
+        fh = open(self.file_name)
+        lines = fh.readlines()
+        while lines:
+            line = lines.pop(0)
+            if line[0] in string.ascii_letters: # We have a parameter
+                match = re.search("^([\w\d_]+) ", line)
+                if match is None: # Something really weird has happened
+                    raise ParameterReadError, "Error reading parameters from %s"%(self.file_name)
+                name=match.group(1)
+                line = lines.pop(0)
+            	s = line.split()
+		count=int(s[0])
+                if s[1][0]=='"': # Not a number
+                    match = re.search('^.*?"(.*)"\s+$', line)
+                    tmp = match.group(1)
+                    s = tmp.split('" "')
+                    value=s
+                else: # This is a number
+                    s.pop(0)
+                    value = [float(i) for i in s]
+                if count<1: # Something really weird has happened
+                    raise ParameterReadError, "Error reading parameters from %s"%(self.file_name)
+# TOmek: SHould fix it & enable for control
+#                if not count==len(s):
+#                    print name,s,count,len(s)
+#                    raise ParameterReadError, "Error reading parameters from %s"%(self.file_name)
+                if count>1:
+                    self[name]=value
+                else:
+#                    print name,s
+                    self[name]=value[0]
+
+    def __str__(self):
+        return self.sprintf(self["dg"])+self.sprintf(self["dg2"])
+    def sprintf(self, pattern):
+	"""It will print the parameter set according to the Varian-derived pattern."""
+        col_width = 18 			# Width of the column (in characters)
+        col_sep = "  "			# Separator between the columns
+        col_num = 0
+        column = []
+        lines = []
+        #print "pattern =", pattern
+        for grp in pattern.split(";"):
+            match = re.search("^(\d+):(.*?):(.*)$", grp)
+            if match is None:
+                continue
+            column_number = int(match.group(1)) 
+            name = match.group(2) 	# Name of the group
+            desc = match.group(3) 	# Descrition on how to arrange the elements of the group on the page
+            if col_num!=column_number:  # This assumes that the column numbers are already sorted
+                col_num=column_number
+                if len(lines)>0:
+                     column.append(lines)
+                     lines=[]
+            lines.append(("%"+str(col_width)+"s")%(name))
+            # Column description goes like that: 
+            # 1:SAMPLE:date,sample,solvent,file;
+            # <Column Number>:<Group Title>:<Param1>,<Param2>,...,<Param n>;
+            for par in desc.split(","): # This part deciphers the column description 
+                dec = "0"
+                par_split = par.split(':')
+                par_name=par_split[0]
+		if self.has_key(par_name):
+                    par_value=self[par_name]
+                else:
+                    par_value=""
+                if len(par_split)>1:
+                    dec=par_split[1]
+                fmt = "%-9s"
+                if type(par_value) is types.ListType:
+                    par_value="arrayed"
+                    fmt+="%9s"
+                elif type(par_value) is types.StringType:
+                    fmt+="%9s"
+                elif type(par_value) is types.FloatType:
+                    fmt+="%9."+dec+"f"
+                # print par, fmt, par_name, par_value
+		# Possibly introduce breaking long lines into the new line, 
+                # and not truncating, as done now?
+                lines.append((fmt%(par_name, par_value))[:col_width])
+        column.append(lines)
+        # This part actually puts the columns together for printing 
+        max_lines = max([len(l) for l in column])
+        rtn=""
+        for i in range(max_lines):
+            for l in column:
+                if i<len(l):
+                    rtn+=l[i]
+                else:
+                    rtn+=' '*col_width
+                rtn+=col_sep # Separator between the columns
+            rtn+="\n"
+        return rtn
+
+#                    if 
+#                    self[param]=
+if __name__=='__main__':
+    proc_file="procpar"
+    directory="./"
+    group=None
+    verbose=False
+    options = getopt.getopt(sys.argv[1:], "f:d:g:vsh")
+    if len(options[0])>0:
+        for opt, arg in options:
+            if opt=="-f":
+                proc_file= arg
+            elif opt=="-d":
+                directory = arg
+            elif opt=="-g":
+                group = arg 
+            elif opt=="-v":
+                verbose= True
+    file_name = "%s/%s"%(directory,proc_file)
+    p=Params(file_name)
+    
+    if group is None:
+        output = str(p)
+    else:
+        output = p.sprintf(p[:])    
+    print output
+#    print p['dg']
+#    print p.sprintf(p["ap"])
+    #print p
+
+### Local Variables: ***
+### py-indent-offset: 4 ***
+### mode: font-lock ***
+### End: ***
+
+

@@ -16,4 +16,9 @@ bpar extracts any of the acquisition parameters from acqu* files generated durin
 
 vpar extracts any of the acquisition parameters from procpar file generated during NMR data acqusition under vnmr.
 
+`vpars` - print all the parameters from the Varian procpar in a format described by the 'dg' and 'dg2'
+------------------------------------------------------------------
+
+vpars parses `dg` and `dg2` variables to display all the parameters and in the same style as in vnmr. 
+
 
