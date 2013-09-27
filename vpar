@@ -1,0 +1,177 @@
+#!/usr/bin/perl -w
+
+# Author: T. Religa
+# Licence: GPL
+# Date: 2008-09-07
+
+=head1 NAME
+
+vpar - extracts the acqusition parameters from Varian NMR directories
+
+=head1 SYNOPSIS
+
+vpar I<[options]> I<< parameter >>
+
+=head1 DESCRIPTION
+
+vpar extracts any of the acquisition parameters from procpar file generated during NMR data acqusition under vnmr.
+
+=head1 OPTIONS
+
+The program accepts the following options:
+
+=over 4
+
+=item B<-f> I<file>
+ 
+File used to extract the data from (default: procpar).
+
+=item B<-d> I<directory>
+
+Directory used to extract the data from (default: . (i.e. current directory)).
+
+=item B<-c>
+
+Print the number of values in the parameter (useful for array variables).
+
+=item B<-p>
+
+Print the file name used to extract the data.
+
+=item B<-n>
+
+Print 'NA' and exit with status 0 if parameter not found.
+
+=item B<-v>
+
+Make the program verbose.
+
+=item B<-h>
+
+Print out this help.
+
+=back
+
+=head1 EXAMPLES
+
+The easiest way to use vpar is to go to the directory that contains the procpar files and run it with the parameter of interest.  
+
+=over 2
+
+=item Check the length of 90 proton pulse (pw1):
+
+C<< vpar pw >>
+
+=item Check the number of points in the direct dimension:
+
+C<< vpar np >>
+
+=item Check the number of points in the indirect dimension:
+
+C<< vpar ni >> 
+
+=item Check the number of values in the phase array:
+
+C<< vpar -c phase >> 
+
+=back
+
+=head1 SEE ALSO
+
+bpar(1) vpars(1) nmrPipe(1) 
+
+=head1 AUTHOR
+
+T. Religa
+
+=head1 VERSION
+
+  0.1
+
+=cut
+
+
+
+
+
+use Getopt::Std;
+
+getopts('f:d:cnphv', \%opts);
+
+&usage() if $opts{"h"};
+$verbose = $opts{"v"} || 0;
+$dir = $opts{"d"} || '.';
+$file = $opts{"f"} || 'procpar';
+$print_count = $opts{"c"};
+$print_file = $opts{"p"};
+$na = $opts{"n"};
+$par = $ARGV[0] || &usage("You did not provide the parameter to look for.\n");
+
+# This is for arrayed elements
+if ((@ARGV +0)>1) {$elem = int($ARGV[1]);}
+#&usage("Invalid syntax for the parameter. It can contain only A-Za-z0-9.\n") unless ($par =~ /^[A-Z\_]+[0-9]*$/i);
+
+$file_name="$dir/$file";
+open(FILE, "<$file_name") or die("$0: Can't open $dir/$file for reading."); &verbose("Using file: $dir/$file");
+@f=<FILE>; chomp @f; 
+
+printf "%-80s\t", $file_name if $print_file;
+
+while ($line = shift @f)
+{
+  chomp $line;
+  if ($line =~ /^$par /)
+  {
+    $line = shift @f;
+    chomp $line;
+    @fields = split /\s/, $line;
+    $count = $fields[0]; 
+    if ($print_count) {
+     print "$count\n";
+     exit 0;
+    }
+    if ($count==1) {
+     print "$fields[1]\n";
+    } elsif ($count>1 && defined $elem) {
+     die("$0: The parameter has only '$count' elements.\n") if ($elem>$count);
+     die("$0: The element number must be positive.\n") if ($elem<1);
+     print "$fields[$elem]\n";
+    } elsif ($count>1) {
+     shift @fields;
+     print "@fields\n";
+    }
+    exit 0;
+  } 
+}
+
+if ($na) {
+ print "NA\n"; 
+ exit(0);
+} else {
+ die("$0: Parameter not found.\n");
+}
+
+
+sub verbose()
+  {
+    warn ("@_\n") if $verbose;
+  }
+
+sub usage()
+  {
+  if (@_) {$txt = "ERROR: @_";} else {$txt="";}
+    die("Usage: $0 [options] <parameter> [<array element>]
+The program extracts the values of acqusition parameters from Varian NMR
+acqusition directories.
+ -f \t file used to extract the data from (default: procpar)
+ -d \t directory used to extract the data from (default: .)
+ -c \t print the number of values in the parameter
+ -p \t print file name used to extract the data
+ -n \t print 'NA' and exit with status 0 if parameter not found 
+ -v \t make the program verbose
+ -h \t print out this help
+    \t if more help needed, type: perldoc $0
+$txt");
+  }
+
+

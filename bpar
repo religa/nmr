@@ -99,9 +99,9 @@ $file = $opts{"f"} || 'acqus';
 $file = 'acqus' if $opts{"1"};
 $file =  'acqu2s' if $opts{"2"};
 $file =  'acqu3s' if $opts{"3"};
-$par = $ARGV[0] || &usage("You did not provide the parameter to look for.\n");
+$par = $ARGV[0] || &usage("ERROR: You did not provide the parameter to look for.\n");
 $par =~ tr/a-z/A-Z/;
-&usage("Invalid syntax for the parameter. It can contain only A-Za-z0-9.\n") unless ($par =~ /^[A-Z_]+[0-9]*$/);
+&usage("ERROR: Invalid syntax for the parameter. It can contain only A-Za-z0-9.\n") unless ($par =~ /^[A-Z_]+[0-9]*$/);
 
 open(FILE, "<$dir/$file") or die("$0: Can't open $dir/$file for reading."); &verbose("Using file: $dir/$file");
 @f=<FILE>; chomp @f; 
@@ -129,7 +129,7 @@ while ($line = shift @f)
       push @fields, split / /, $line;
     }
 #    warn("Invalid number of fields (".(@fields+0).") in the parameter array in line:\n$line") if (@fields+0!=($end - $start));
-    die("Parameter not found\n") if ($end - $par_tail + $start < 0);
+    die("$0: Parameter not found\n") if ($end - $par_tail + $start < 0);
 
     print "$fields[$par_tail + $start]\n";
     exit 0;
@@ -138,7 +138,7 @@ while ($line = shift @f)
 
 }
 
-die("Parameter not found\n");
+die("$0: Parameter not found\n");
 
 
 sub verbose()
