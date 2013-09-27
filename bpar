@@ -1,0 +1,163 @@
+#!/usr/bin/perl -w
+
+# Author: Tomasz Religa
+# Licence: GPL
+
+=head1 NAME
+
+bpar - extracts the acqusition parameters from Bruker NMR directories
+
+=head1 SYNOPSIS
+
+bpar I<[options]> I<< parameter >>
+
+=head1 DESCRIPTION
+
+bpar extracts any of the acquisition parameters from acqu* files generated during NMR data acqusition under xwinnmr or Topspin. 
+
+=head1 OPTIONS
+
+The program accepts the following options:
+
+=over 4
+
+=item B<-f> I<file>
+ 
+File used to extract the data from (default: acqus).
+
+=item B<-d> I<directory>
+
+Directory used to extract the data from (default: . (i.e. current directory)).
+
+=item B<-1>
+
+Shortcut for I<-f acqus>.
+
+=item B<-2>
+
+Shortcut for I<-f acqu2s>.
+
+=item B<-3>
+
+Shortcut for I<-f acqu3s>.
+
+=item B<-v>
+
+Make the program verbose.
+
+=item B<-h>
+
+Print out this help.
+
+
+=back
+
+=head1 EXAMPLES
+
+The easiest way to use bpar is to go to the directory that contains the acqu files and run it with the parameter of interest.  
+
+=over 2
+
+=item Check the length of 90 proton pulse (p1):
+
+C<< bpar p1 >>
+
+=item Check the number of points in the direct dimension:
+
+C<< bpar td >>
+
+=item Check the number of points in the first indirect dimension. Both commands are equivalent, since I<-2> is just a shortcut for I<-f acqu2s>:
+
+C<< bpar -2 td >>  E<10> E<8>
+C<< bpar -f acqu2s td >>
+
+=back
+
+=head1 SEE ALSO
+
+vpar(1) vpars(1) nmrPipe(1) 
+
+=head1 AUTHOR
+
+T. Religa
+
+=head1 VERSION
+
+  0.1
+
+=cut
+
+
+use Getopt::Std;
+
+getopts('f:d:123hv', \%opts);
+
+&usage() if $opts{"h"};
+$verbose = $opts{"v"} || 0;
+$dir = $opts{"d"} || '.';
+$file = $opts{"f"} || 'acqus';
+$file = 'acqus' if $opts{"1"};
+$file =  'acqu2s' if $opts{"2"};
+$file =  'acqu3s' if $opts{"3"};
+$par = $ARGV[0] || &usage("You did not provide the parameter to look for.\n");
+$par =~ tr/a-z/A-Z/;
+&usage("Invalid syntax for the parameter. It can contain only A-Za-z0-9.\n") unless ($par =~ /^[A-Z_]+[0-9]*$/);
+
+open(FILE, "<$dir/$file") or die("$0: Can't open $dir/$file for reading."); &verbose("Using file: $dir/$file");
+@f=<FILE>; chomp @f; 
+
+($par_head, $par_tail) = $par =~ m/^([A-Z_]+)([0-9]*)$/;
+
+#foreach $line (@f)
+
+while ($line = shift @f)
+{
+  chomp $line;
+  if ($line =~ /^\#\#\$$par= ([^\(\)]+)$/)
+  {
+    print "$1\n";
+    exit 0;
+  } elsif ($line =~ /^\#\#\$$par_head= \((\d+)\.\.(\d+)\)$/)
+  {
+    $start=$1;
+    $end=$2;
+    @fields = ();
+    while($#fields!=$end)
+    {
+      $line = shift @f; # Since the parameter is an array in the new line 
+      chomp $line;
+      push @fields, split / /, $line;
+    }
+#    warn("Invalid number of fields (".(@fields+0).") in the parameter array in line:\n$line") if (@fields+0!=($end - $start));
+    die("Parameter not found\n") if ($end - $par_tail + $start < 0);
+
+    print "$fields[$par_tail + $start]\n";
+    exit 0;
+
+  }
+
+}
+
+die("Parameter not found\n");
+
+
+sub verbose()
+  {
+    warn ("@_\n") if $verbose;
+  }
+
+sub usage()
+  {
+    die("Usage: $0 [options] <parameter>
+The program extracts the values of acqusition parameters from Bruker NMR
+acqusition directories
+ -f \t file used to extract the data from (default: acqus)
+ -d \t directory used to extract the data from (default: .)
+ -1 \t shortcut for -f acqus
+ -2 \t shortcut for -f acqu2s
+ -3 \t shortcut for -f acqu3s
+ -v \t make the program verbose
+ -h \t print out this help
+    \t for more help, type: perldoc $0
+@_");
+  }
