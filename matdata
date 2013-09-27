@@ -1,0 +1,270 @@
+#!/usr/bin/perl -w
+
+# Author: T. Religa
+# Licence: GPL
+# Date: 2005-04-25
+
+=head1 NAME
+
+matdata - Felix NMR .mat file metadata modifier
+
+=head1 SYNOPSIS
+
+matdata I<[options]> I<.mat_file>
+
+=head1 DESCRIPTION
+
+The program allows for modification of Felix .mat file metadata, which contains 2D and 3D NMR datasets. In each run it can modify one parameter of a dimension. 
+
+Usually, the program would be run with a dimension specifier, followed by the property that must be modified for that dimension.  
+
+=head1 OPTIONS
+
+This script currently supports the following command line switches:
+
+=over 4
+
+=item B<-1>
+
+Choose the first dimension for modification.
+
+=item B<-2> 
+
+Choose the second dimension for modification.
+
+=item B<-3>
+
+Choose the third dimension for modification.
+
+=item B<-s> I<sw>
+
+Modify the spectral width (sw). Must be used with dimension specifier.
+
+=item B<-t> I<td>
+
+Modify the number of points (td). Must be used with dimension specifier.
+
+=item B<-b> I<bf>
+
+Modify the base frequency (bf). Must be used with dimension specifier.
+
+=item B<-l> I<label>
+
+Modify the label. Must be used with dimension specifier.
+
+=item B<-f>
+
+Print file name that is worked on.
+
+=item B<-q>
+
+Be quiet (don't print anything apart from error messages).
+
+=item B<-v>
+
+Enable verbose output.
+
+=item B<-h>
+
+Print helpful help message.
+
+=back
+
+=head1 EXAMPLES
+
+=over 2
+
+=item Show the properties of the mat file:
+
+C<< matdata file.mat >>
+
+=item Set the spectral width of the 1st dimension to 1500 Hz:
+
+C<< matdata -1s 1500 file.mat >>
+
+=item Perform byte swapping (from little to big-endian or vice-versa):
+
+C<< matdata -e file.mat >>
+
+=item B<Disallowed>. Modify properties of both 1st and 2nd dimension at the same time is not supported at this moment:
+
+C<< matdata -1s 1500 -1b 500.139 file.mat >>
+
+=back
+
+=head1 SEE ALSO
+
+byteSwap(1) nmrPipe(1) showhdr(1) sethdr(1) ucsfdata(1) 
+
+=head1 AUTHOR
+
+T. Religa
+
+=head1 VERSION
+
+  0.1
+
+=cut
+
+use Getopt::Std;
+
+getopts('123feqt:b:s:l:hv', \%opts);
+
+&usage() if $opts{"h"};
+$verbose = $opts{"v"} || 0;
+$quiet = $opts{"q"};
+$print_name = $opts{"f"};
+$file_name = $ARGV[0] or &usage();
+$dim=0; # Dimension for modification
+$dim=1 if $opts{"1"};
+$dim=2 if $opts{"2"};
+$dim=3 if $opts{"3"};
+$endianess = $opts{"e"}; # Change endianness
+$t = $opts{"t"}; # TD
+$b = $opts{"b"}; # BF
+$s = $opts{"s"}; # SW
+$l = $opts{"l"}; # LABEL
+$swap=0; # Perform data swapping for reading?
+
+open(F, "+<$file_name") or die("$0: Can't open file '$file_name' for reading/writing.\n");
+
+binmode(F);
+
+read F, $buffer, 4;
+
+$nd = unpack("l", $buffer);
+$swap=1 if $nd>4; # nd will be a large number if swapping should be performed
+&verb("File swapping is $swap.");
+
+($nd, $mat_type, $bricks, $span) = read_val("llll", 0, 16);
+&verb("ND = $nd\nMatrix Type = $mat_type\nBricks = $bricks\nSpan = $span.");
+die("$0: Something wrong with swapping flag determination") if $nd>4;
+
+write_val("l", (20+1*$nd+$dim-1)*4, $t) if $t && $dim;
+write_val("f", (20+6*$nd+$dim-1)*4, $b) if $b && $dim;
+write_val("f", (20+7*$nd+$dim-1)*4, $s) if $s && $dim;
+write_val("A*", 220*4+($dim-1)*32, sprintf "%-8s", $l) if $l && $dim;
+
+@lab = ();
+@td = ();
+@sw = ();
+foreach (0..($nd - 1)) {
+ push @td, read_val("l", (20+1*$nd+$_)*4, 4);
+ 
+ push @bf, read_val("f", (20+6*$nd+$_)*4, 4);
+ push @sw, read_val("f", (20+7*$nd+$_)*4, 4);
+ push @lab, read_val("A*", 220*4 + 32*$_, 32);
+ push @block_count, read_val("l", (20+2*$nd+$_)*4, 4);
+ push @block_step, read_val("l", (20+3*$nd+$_)*4, 4);
+ push @block_size, read_val("l", (20+4*$nd+$_)*4, 4);
+ push @data_step, read_val("l", (20+5*$nd+$_)*4, 4);
+ push @ref_point, read_val("f", (20+8*$nd+$_)*4, 4);
+ push @ref_shift, read_val("f", (20+9*$nd+$_)*4, 4);
+}
+&verb("block_count: @block_count; block_step: @block_step; @block_size: @block_size");
+&verb ("data_step: @data_step; ref_point: @ref_point; ref_shift = @ref_shift");
+
+# From Sparky felixfile.cc:
+#       double sfreq = fh.observe_freq[a];
+#      double ppm_per_data_point =
+#        (fh.spectral_width[a] / fh.data_size[a]) / sfreq;
+#      double ppm_ref = fh.ref_shift[a] / sfreq;
+#      double ref_pos = fh.ref_point[a] - 1;     // 1 = origin in felix
+#      origin_ppm[a] = ppm_ref + ppm_per_data_point * ref_pos;
+#
+print "$file_name\n" if $print_name;
+unless ($quiet) {
+  printf "Dimension".("\t\t%d"x$nd)."\n", (1..$nd);
+  printf "Nucleus\t".("\t\t%s"x$nd)."\n", @lab;
+  printf "Matrix Size".("\t\t%d"x$nd)."\n", @td;
+  printf "Spectral Width\t".("\t%-10.3f"x$nd)."\n", @sw;
+  printf "Base Frequency\t".("\t%-10.3f"x$nd)."\n", @bf;
+  #printf "Spectrum Centre\t".("\t%.3f"x$nd)."\n", @o;
+}
+close(F) or warn("$0:Error closing the file handle for '$file_name'");
+
+if ($endianess)
+{
+  open(SRC, "<$file_name") or die("$0: Can't open file '$file_name' for reading.\n");
+  binmode(SRC);
+  open(DST, ">$file_name.dst") or die("$0: Can't open file '$file_name.dst' for writing.\n");
+  binmode(DST);
+
+  $count = 0;
+  while ($c = read SRC, $buffer, 4096)
+  {
+    $count += $c;
+    @data = unpack ("V*", $buffer);
+    $buffer = pack("N*", @data);
+    print DST $buffer;
+  }
+  &verb("Converted $count bytes.");
+  close(SRC);
+  close(DST);
+  rename("$file_name.dst", "$file_name") or die("$0: Can't rename the byte-swapped file to the orignal '$file_name' name.");
+}
+
+die("$0: Dimension not specified. Modification not performed.\n") if $dim==0 && ($t || $b || $s || $l);
+die("$0: Variable not specified. Modification not performed.\n") if $dim && !($t || $b || $s || $l);
+
+# Write value(s) at a given position to the file
+sub write_val {
+  my ($pattern, $pos, $val) = @_;
+  $buffer = pack($pattern, $val);
+  if ($swap)  # byte-swap on fly
+  {
+    @data = unpack ("V*", $buffer);
+    $buffer = pack("N*", @data);
+  }
+  &verb("Modifying byte $pos with value '$val' using pattern '$pattern'.");
+  seek F, $pos, 0;
+  print F $buffer;
+}
+
+# Read value(s) at a given byte from the file
+sub read_val {
+  my ($pattern, $pos, $byte) = @_;
+  seek F, $pos, 0;
+  read F, $buffer, $byte;
+  if ($swap) # byte-swap on fly
+  {
+    @data = unpack ("V*", $buffer);
+    $buffer = pack("N*", @data);
+  }
+  @data = unpack ("$pattern", $buffer);
+  return @data;
+}
+
+sub verb {warn("@_\n") if $verbose;}
+
+
+sub usage()
+  {
+    print("Usage: $0 [options] <.mat file>
+The program reads and writes metadata to a Felix .mat file.  In writing mode only a single value can be changed. Flags, such as: -1s -2t in a single execution are not allowed.
+Example:
+matdata file.mat\t\tRead information from the mat file
+matdata -1s 1500 file.mat\tSet the spectral width of the 1st dimension to 1500 Hz
+matdata -e file.mat\t\tPerform byte swapping (from little to big-endian or vice-versa)
+matdata -1s 1500 -1b 500.139 file.mat\tDisallowed! 
+ -1 Choose the first dimension for modification
+ -2 Choose the second dimension for modification
+ -3 Choose the third dimension for modification
+ -s Modify the spectral width \t\t(sw)
+ -t Modify the number of points \t(td)
+ -b Modify the base frequency \t\t(bf)
+ -l Modify the label \t\t\t()
+ -e Change the endianness of the data (perform byte-swapping)
+ -f print file name
+ -q be quiet (don't print anything apart from error messages) 
+ -v enable verbose output
+ -h print this helpful help message
+    for full help, type: 'perldoc $0'
+");
+    exit (0);
+  }
+
+#Local Variables:
+#mode: perl
+#mode: font-lock
+#End:
