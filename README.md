@@ -21,4 +21,14 @@ vpar extracts any of the acquisition parameters from procpar file generated duri
 
 vpars parses `dg` and `dg2` variables to display all the parameters and in the same style as in vnmr. 
 
+`xplor20Sgate.zip` - xplor files for proteasome gate structure calculation
+------------------------------------------------------------------
+
+Set of Bash, Perl, Python, R scripts to calculate proteasome gate structures using 
+xplor-nih and condor distributed computing system, as specified in Supplementary Information of:
+
+Religa et al. (2010) Dynamic regulation of archaeal proteasome gate opening as studied by TROSY NMR, Science 328(5974):98-102
+http://www.sciencemag.org/content/328/5974/98/suppl/DC1
+
+
 
