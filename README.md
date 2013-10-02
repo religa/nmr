@@ -1,15 +1,15 @@
 NMR data processing tools
 =========================
 
-`matdata` - Felix NMR .mat file metadata modifier
----------------------------------------------
-
-The program reads and writes metadata to a Felix .mat file.
-
 `bpar` - extracts the acqusition parameters from Bruker NMR directories
 ------------------------------------------------------------------
 
 bpar extracts any of the acquisition parameters from acqu/s files generated during NMR data acqusition under xwinnmr or Topspin.
+
+`matdata` - felix nmr .mat file metadata modifier
+---------------------------------------------
+
+The program reads and writes metadata to a felix .mat file.
 
 `vpar` - extracts the acqusition parameters from Varian NMR directories
 ------------------------------------------------------------------
